@@ -1,5 +1,8 @@
-typer~=0.4.0
-PyYAML~=6.0
-Pillow~=9.0.1
-PyPDF2~=1.26.0
-setuptools~=58.1.0
+typer>=0.4.0
+PyYAML>=6.0
+Pillow>=10.0.0
+PyPDF2>=1.26.0
+setuptools>=58.1.0
+pdf2docx>=0.5.6
+ocrmypdf>=16.0
+pdfminer.six>=20220524

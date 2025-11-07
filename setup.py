@@ -20,7 +20,7 @@ setup(
                                       "i2pdf= i2pdf:app"]},
     url="https://github.com/christopher-chandler",
     license="MIT",
-    install_requires=["typer", "PyYAML", "Pillow", "PyPDF2"],
+    install_requires=["typer", "PyYAML", "Pillow", "PyPDF2", "pdf2docx", "ocrmypdf", "pdfminer.six"],
     author="Christopher Michael Chandler",
     author_email="christopher.chandler@outlook.de",
     description="A simple CLI app that combines images to a single .pdf",

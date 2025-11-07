@@ -113,3 +113,62 @@ class MessageKeys:
         )
 
         results = "results"
+
+    class PdfToDocx:
+        """
+        see function pdf_to_docx
+        """
+
+        pdf_to_docx_name = "pdf-to-docx"
+        pdf_to_docx_help = "Convert a PDF file to a DOCX (Word) document."
+        input_pdf_help = "The name or path of the input PDF file."
+        output_docx_help = "The output DOCX file name (defaults to input name)."
+        converting = typer.style("Converting PDF to DOCX...", fg=typer.colors.BRIGHT_MAGENTA)
+        converted = typer.style("DOCX file created successfully!", fg=typer.colors.GREEN)
+        pdf_missing = typer.style("Error: The specified PDF could not be found.", fg=typer.colors.RED)
+        conversion_error = typer.style("Error: Conversion failed. Please check the PDF file.", fg=typer.colors.RED)
+
+    class PdfToText:
+        """
+        see function pdf_to_text
+        """
+
+        pdf_to_text_name = "pdf-to-text"
+        pdf_to_text_help = "Extract plain text from a (scanned) PDF using Tesseract (sidecar)."
+        input_pdf_help = "Input PDF path."
+        output_txt_help = "Output TXT file name (defaults to input name + .txt)."
+        lang_help = "OCR language code (e.g., ara, eng, fra+eng)."
+        converting = typer.style("Extracting text via OCR...", fg=typer.colors.BRIGHT_MAGENTA)
+        converted = typer.style("Text file created successfully!", fg=typer.colors.GREEN)
+        pdf_missing = typer.style("Error: The specified PDF could not be found.", fg=typer.colors.RED)
+        conversion_error = typer.style("Error: OCR failed. Please verify Tesseract/lang data.", fg=typer.colors.RED)
+
+    class PdfVerify:
+        """
+        see function pdf_verify
+        """
+
+        name = "pdf-verify"
+        help = "Extract text aiming for >= threshold quality; detects text layer else OCR."
+        input_pdf_help = "Input PDF path."
+        out_dir_help = "Directory to write outputs (text + report)."
+        lang_help = "OCR language (e.g., ara, eng, fra+eng)."
+        threshold_help = "Required minimal quality (0-1)."
+        processing = typer.style("Verifying and extracting...", fg=typer.colors.BRIGHT_MAGENTA)
+        done = typer.style("Extraction completed.", fg=typer.colors.GREEN)
+        failed = typer.style("Quality below threshold.", fg=typer.colors.RED)
+        pdf_missing = typer.style("Error: The specified PDF could not be found.", fg=typer.colors.RED)
+
+    class PdfBest:
+        """
+        see function pdf_best
+        """
+
+        name = "pdf-best"
+        help = "Best-effort Arabic text extraction: detect text layer or multi-pass OCR, select best."
+        input_pdf_help = "Input PDF path."
+        out_dir_help = "Directory to write the final text and report."
+        lang_help = "Primary OCR language (default ara)."
+        processing = typer.style("Running best-effort extraction...", fg=typer.colors.BRIGHT_MAGENTA)
+        done = typer.style("Best-effort extraction completed.", fg=typer.colors.GREEN)
+        pdf_missing = typer.style("Error: The specified PDF could not be found.", fg=typer.colors.RED)
