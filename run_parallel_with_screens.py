@@ -16,8 +16,8 @@ from typing import List, Tuple
 # إعدادات
 BOOKS_FILE = "books-2025-11-09T23-13-42-652Z.json"
 SCRIPT_NAME = "inspect_books_mongodb.py"
-START_BOOK = 110  # من الكتاب رقم 110
-END_BOOK = 2116   # إلى الكتاب رقم 2116
+START_BOOK = 1  # من الكتاب رقم 1 (يتم تحديثه تلقائياً من الملف)
+END_BOOK = None  # سيتم تحديثه تلقائياً من الملف
 NUM_SCRIPTS = 50  # عدد السكربتات المتوازية
 
 def check_screen_installed() -> bool:
@@ -39,6 +39,17 @@ def install_screen():
     except Exception as e:
         print(f"❌ فشل تثبيت screen: {e}")
         return False
+
+def get_books_count(books_file: str) -> int:
+    """قراءة عدد الكتب من الملف JSON"""
+    try:
+        with open(books_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        books = data.get("books", [])
+        return len(books)
+    except Exception as e:
+        print(f"⚠️  خطأ في قراءة الملف: {e}")
+        return 0
 
 def calculate_ranges(start: int, end: int, num_scripts: int) -> List[Tuple[int, int]]:
     """
@@ -154,26 +165,28 @@ def main():
         sys.exit(1)
     
     # قراءة عدد الكتب الفعلي
-    try:
-        with open(BOOKS_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        total_books_in_file = len(data.get("books", []))
-        print(f"📚 عدد الكتب في الملف: {total_books_in_file}")
-    except:
-        total_books_in_file = END_BOOK
+    total_books_in_file = get_books_count(BOOKS_FILE)
+    if total_books_in_file == 0:
+        print(f"❌ لم يتم العثور على كتب في الملف")
+        sys.exit(1)
+    
+    print(f"📚 عدد الكتب في الملف: {total_books_in_file}")
+    
+    # تحديث END_BOOK تلقائياً إذا كان None
+    actual_end_book = END_BOOK if END_BOOK is not None else total_books_in_file
     
     # التحقق من النطاق
     if START_BOOK < 1 or START_BOOK > total_books_in_file:
         print(f"❌ رقم البداية غير صحيح (يجب أن يكون بين 1 و {total_books_in_file})")
         sys.exit(1)
-    if END_BOOK < START_BOOK or END_BOOK > total_books_in_file:
+    if actual_end_book < START_BOOK or actual_end_book > total_books_in_file:
         print(f"❌ رقم النهاية غير صحيح (يجب أن يكون بين {START_BOOK} و {total_books_in_file})")
         sys.exit(1)
     
     # حساب النطاقات
-    total_books_to_process = END_BOOK - START_BOOK + 1
-    print(f"\n📊 تقسيم {total_books_to_process} كتاب (من {START_BOOK} إلى {END_BOOK}) على {NUM_SCRIPTS} سكربت...")
-    ranges = calculate_ranges(START_BOOK, END_BOOK, NUM_SCRIPTS)
+    total_books_to_process = actual_end_book - START_BOOK + 1
+    print(f"\n📊 تقسيم {total_books_to_process} كتاب (من {START_BOOK} إلى {actual_end_book}) على {NUM_SCRIPTS} سكربت...")
+    ranges = calculate_ranges(START_BOOK, actual_end_book, NUM_SCRIPTS)
     
     print(f"\n📋 النطاقات:")
     for i, (start, end) in enumerate(ranges, 1):
