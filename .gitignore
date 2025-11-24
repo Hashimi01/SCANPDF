@@ -16,5 +16,6 @@ test_*
 temp_*
 *.json
 !package.json
+!books-*.json
 results/
 test_output*/
