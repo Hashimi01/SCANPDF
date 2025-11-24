@@ -8,7 +8,7 @@ import subprocess
 import os
 import sys
 
-def find_large_files(directory="/", min_size_mb=100, top_n=20):
+def find_large_files(directory="/", min_size_mb=10, top_n=30):
     """
     البحث عن الملفات الكبيرة
     
@@ -143,9 +143,26 @@ def main():
     if disk:
         print(disk)
     
-    # البحث عن الملفات الكبيرة
+    # البحث عن الملفات الكبيرة في مجلدات محددة
     print("\n" + "=" * 70)
-    large_files = find_large_files("/", min_size_mb=50, top_n=20)
+    search_dirs = ["/tmp", "/root", "/var", "/usr"]
+    all_large_files = []
+    
+    for search_dir in search_dirs:
+        if os.path.exists(search_dir):
+            print(f"\n🔍 البحث في {search_dir}...")
+            files = find_large_files(search_dir, min_size_mb=10, top_n=30)
+            all_large_files.extend(files)
+    
+    # عرض أكبر الملفات من جميع المجلدات
+    if all_large_files:
+        all_large_files.sort(reverse=True)
+        print(f"\n{'='*70}")
+        print(f"📊 أكبر {min(20, len(all_large_files))} ملف من جميع المجلدات:\n")
+        print(f"{'الحجم':<12} {'المسار'}")
+        print("-" * 70)
+        for size_mb, size, path in all_large_files[:20]:
+            print(f"{size:<12} {path}")
     
     # البحث عن المجلدات الكبيرة
     find_large_directories("/root", top_n=10)

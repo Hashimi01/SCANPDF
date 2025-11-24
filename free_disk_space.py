@@ -23,6 +23,7 @@ def clean_temp_files():
         '/tmp',
         '/tmp/i2pdf_temp',
         '/root/i2pdf/temp_i2pdf_old.py',
+        '/root/.cache',
     ]
     
     print("🧹 جاري تنظيف الملفات المؤقتة...")
