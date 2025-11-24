@@ -17,7 +17,7 @@ import platform
 import signal
 import warnings
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 
 # قمع تحذيرات PyPDF2 حول التعريفات المكررة
@@ -457,8 +457,68 @@ def save_book_to_mongodb(collection, book_data: Dict[str, Any]) -> bool:
         return False
 
 
+# إعدادات فحص الجودة
+MIN_CHARS_PER_PAGE = 70  # الحد الأدنى لعدد الأحرف في الصفحة
+MIN_GOOD_PAGES_PERCENT = 70  # الحد الأدنى لنسبة الصفحات الجيدة (70%)
+
+def check_book_quality(collection, book_id: str, expected_lang: str) -> Tuple[bool, float]:
+    """
+    التحقق من جودة كتاب في MongoDB
+    
+    Args:
+        collection: مجموعة MongoDB
+        book_id: معرف الكتاب
+        expected_lang: اللغة المتوقعة (ara أو fra)
+        
+    Returns:
+        (should_reprocess, good_pages_percent)
+        - should_reprocess: True إذا كان يحتاج إعادة فحص
+        - good_pages_percent: نسبة الصفحات الجيدة
+    """
+    try:
+        book = collection.find_one({"_id": book_id})
+        if not book:
+            return True, 0.0  # الكتاب غير موجود، يحتاج فحص
+        
+        # التحقق من اللغة
+        language = book.get("language", "ara")
+        if language != expected_lang:
+            return True, 0.0  # اللغة خاطئة، يحتاج إعادة فحص
+        
+        pages = book.get("pages", [])
+        if not pages or len(pages) == 0:
+            return True, 0.0  # لا توجد صفحات، يحتاج فحص
+        
+        # حساب الصفحات الجيدة (أكثر من MIN_CHARS_PER_PAGE حرف)
+        good_pages = 0
+        total_pages = len(pages)
+        
+        for page in pages:
+            content = page.get("content", "")
+            # إزالة [skipped page] من الحساب
+            if "[skipped" in content.lower():
+                continue
+            
+            # حساب الأحرف (بدون مسافات)
+            chars_count = len(content.strip())
+            if chars_count >= MIN_CHARS_PER_PAGE:
+                good_pages += 1
+        
+        good_pages_percent = (good_pages / total_pages * 100) if total_pages > 0 else 0
+        
+        # إذا كانت نسبة الصفحات الجيدة أكثر من 70%، لا نحتاج إعادة فحص
+        should_reprocess = good_pages_percent < MIN_GOOD_PAGES_PERCENT
+        
+        return should_reprocess, good_pages_percent
+        
+    except Exception as e:
+        # في حالة الخطأ، نعيد الفحص
+        return True, 0.0
+
+
 def process_book_with_mongodb(book: Dict[str, Any], index: int, total: int, 
-                               collection, auto_detect_lang: bool = True) -> Dict[str, Any] | None:
+                               collection, auto_detect_lang: bool = True, 
+                               skip_if_good: bool = True) -> Dict[str, Any] | None:
     """
     معالجة كتاب واحد وحفظه مباشرة في MongoDB
     
@@ -507,6 +567,21 @@ def process_book_with_mongodb(book: Dict[str, Any], index: int, total: int,
         print(f"  🌐 اللغة المكتشفة: {lang_name} ({lang})")
     else:
         lang = "ara"  # افتراضي
+    
+    # التحقق من جودة الكتاب قبل المعالجة (إذا كان موجوداً)
+    if skip_if_good:
+        should_reprocess, good_pages_percent = check_book_quality(collection, book_id, lang)
+        if not should_reprocess:
+            print(f"  ⏭️  تم تخطي الكتاب (جودة جيدة: {good_pages_percent:.1f}%)")
+            return {
+                "_id": book_id,
+                "title": title,
+                "pdfName": pdf_name,
+                "pdfLink": pdf_link,
+                "language": lang,
+                "skipped": True,
+                "good_pages_percent": good_pages_percent
+            }
     
     # إنشاء ملف مؤقت للPDF (تنظيف اسم الملف)
     safe_pdf_name = os.path.basename(pdf_name).replace(" ", "_").replace("/", "_").replace("\\", "_")
@@ -719,13 +794,17 @@ def main():
     success_count = 0
     fail_count = 0
     saved_count = 0
+    skipped_count = 0  # الكتب التي تم تخطيها
     
     try:
         for idx, book in enumerate(selected_books):
-            result = process_book_with_mongodb(book, idx, count, collection, auto_detect_lang=True)
+            result = process_book_with_mongodb(book, idx, count, collection, auto_detect_lang=True, skip_if_good=True)
             if result:
-                success_count += 1
-                saved_count += 1
+                if result.get("skipped", False):
+                    skipped_count += 1
+                else:
+                    success_count += 1
+                    saved_count += 1
             else:
                 fail_count += 1
             
@@ -749,6 +828,7 @@ def main():
     print("=" * 70)
     print(f"   ✅ نجح: {success_count}")
     print(f"   💾 محفوظ في MongoDB: {saved_count}")
+    print(f"   ⏭️  تم تخطيه (جودة جيدة): {skipped_count}")
     print(f"   ❌ فشل: {fail_count}")
     print(f"   📄 إجمالي: {count}")
     
