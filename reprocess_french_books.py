@@ -8,6 +8,7 @@
 import json
 import os
 import sys
+from typing import Tuple
 from inspect_books_mongodb import (
     get_mongodb_collection,
     process_book_with_mongodb,
@@ -17,6 +18,57 @@ from inspect_books_mongodb import (
 
 # إعدادات
 INPUT_FILE = "french_books_incorrectly_processed.json"
+MIN_CHARS_PER_PAGE = 70  # الحد الأدنى لعدد الأحرف في الصفحة
+MIN_GOOD_PAGES_PERCENT = 70  # الحد الأدنى لنسبة الصفحات الجيدة (70%)
+
+def check_book_quality(collection, book_id: str) -> Tuple[bool, float]:
+    """
+    التحقق من جودة كتاب في MongoDB
+    
+    Returns:
+        (should_reprocess, good_pages_percent)
+        - should_reprocess: True إذا كان يحتاج إعادة فحص
+        - good_pages_percent: نسبة الصفحات الجيدة
+    """
+    try:
+        book = collection.find_one({"_id": book_id})
+        if not book:
+            return True, 0.0  # الكتاب غير موجود، يحتاج فحص
+        
+        # التحقق من اللغة
+        language = book.get("language", "ara")
+        if language != "fra":
+            return True, 0.0  # اللغة خاطئة، يحتاج إعادة فحص
+        
+        pages = book.get("pages", [])
+        if not pages or len(pages) == 0:
+            return True, 0.0  # لا توجد صفحات، يحتاج فحص
+        
+        # حساب الصفحات الجيدة (أكثر من MIN_CHARS_PER_PAGE حرف)
+        good_pages = 0
+        total_pages = len(pages)
+        
+        for page in pages:
+            content = page.get("content", "")
+            # إزالة [skipped page] من الحساب
+            if "[skipped" in content.lower():
+                continue
+            
+            # حساب الأحرف (بدون مسافات)
+            chars_count = len(content.strip())
+            if chars_count >= MIN_CHARS_PER_PAGE:
+                good_pages += 1
+        
+        good_pages_percent = (good_pages / total_pages * 100) if total_pages > 0 else 0
+        
+        # إذا كانت نسبة الصفحات الجيدة أكثر من 70%، لا نحتاج إعادة فحص
+        should_reprocess = good_pages_percent < MIN_GOOD_PAGES_PERCENT
+        
+        return should_reprocess, good_pages_percent
+        
+    except Exception as e:
+        print(f"  ⚠️  خطأ في فحص جودة الكتاب: {e}")
+        return True, 0.0  # في حالة الخطأ، نعيد الفحص
 
 def main():
     """الدالة الرئيسية"""
@@ -101,9 +153,21 @@ def main():
     success_count = 0
     fail_count = 0
     saved_count = 0
+    skipped_count = 0  # الكتب التي تم تخطيها
     
     try:
         for idx, book in enumerate(books):
+            book_id = str(book.get("_id", ""))
+            pdf_name = book.get("pdfName", "")
+            
+            # التحقق من جودة الكتاب قبل إعادة الفحص
+            should_reprocess, good_pages_percent = check_book_quality(collection, book_id)
+            
+            if not should_reprocess:
+                print(f"\n[{idx + 1}/{count}] ⏭️  تخطي: {pdf_name} (جودة جيدة: {good_pages_percent:.1f}%)")
+                skipped_count += 1
+                continue
+            
             # إضافة pdfLink إذا لم يكن موجوداً
             if not book.get("pdfLink") and book.get("pdfLink") is None:
                 book["pdfLink"] = book.get("url", "")
@@ -141,6 +205,7 @@ def main():
     print("=" * 70)
     print(f"   ✅ نجح: {success_count}")
     print(f"   💾 محفوظ في MongoDB: {saved_count}")
+    print(f"   ⏭️  تم تخطيه (جودة جيدة): {skipped_count}")
     print(f"   ❌ فشل: {fail_count}")
     print(f"   📄 إجمالي: {count}")
     
