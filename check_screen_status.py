@@ -118,16 +118,26 @@ def main():
     print(f"🔴 بها أخطاء: {error_count} جلسة")
     print(f"📊 إجمالي: {len(active_screens)} جلسة")
     
-    # عرض الجلسات المتوقفة
-    if stopped_count > 0:
+    # جمع الجلسات التي لا تعمل
+    not_working = []
+    for session_name in sorted(active_screens, key=lambda x: int(x.split('_')[-1])):
+        status = check_screen_content(session_name)
+        if not status['running']:
+            not_working.append(session_name)
+    
+    # عرض الجلسات التي لا تعمل
+    if not_working:
         print(f"\n{'='*70}")
-        print("⏳ الجلسات المتوقفة (قد تحتاج إعادة تشغيل):")
+        print("❌ الجلسات التي لا تعمل:")
         print(f"{'='*70}")
-        for session_name in sorted(active_screens, key=lambda x: int(x.split('_')[-1])):
-            status = check_screen_content(session_name)
+        for session_name in not_working:
             script_num = session_name.split('_')[-1]
-            if status['exists'] and not status['running'] and not status['has_error']:
-                print(f"  - {session_name} (الجلسة {script_num})")
+            print(f"  - {session_name} (الجلسة {script_num})")
+        
+        print(f"\n📋 قائمة الأسماء فقط (للاستخدام في السكربتات):")
+        print(",".join(not_working))
+    else:
+        print(f"\n✅ جميع الجلسات تعمل!")
     
     print(f"\n{'='*70}")
     print("✅ اكتمل الفحص!")
