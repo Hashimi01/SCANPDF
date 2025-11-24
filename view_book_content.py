@@ -5,6 +5,7 @@
 """
 
 import sys
+import re
 from pymongo import MongoClient
 
 # إعدادات MongoDB
@@ -12,10 +13,36 @@ MONGO_URI = "mongodb+srv://vall:VVVVvvvv24@cluster0.rzpzrnn.mongodb.net/?retryWr
 DB_NAME = "test"
 COLLECTION_NAME = "book_summaries"
 
-def find_book_by_pdf_name(collection, pdf_name: str):
-    """البحث عن كتاب باسم ملف PDF"""
-    book = collection.find_one({"pdfName": pdf_name})
-    return book
+def find_book_by_pdf_name(collection, pdf_name: str, exact_match: bool = False):
+    """
+    البحث عن كتاب باسم ملف PDF
+    يدعم البحث الجزئي (يحتوي على) أو المطابقة الكاملة
+    """
+    if exact_match:
+        # البحث المطابق الكامل
+        book = collection.find_one({"pdfName": pdf_name})
+        return book
+    else:
+        # البحث الجزئي (يحتوي على)
+        # استخدام regex للبحث غير حساس لحالة الأحرف
+        regex_pattern = re.compile(re.escape(pdf_name), re.IGNORECASE)
+        books = list(collection.find({"pdfName": {"$regex": regex_pattern}}))
+        
+        if len(books) == 0:
+            return None
+        elif len(books) == 1:
+            return books[0]
+        else:
+            # إذا وجد أكثر من كتاب، عرض القائمة
+            print(f"\n⚠️  تم العثور على {len(books)} كتاب مطابق:")
+            for i, b in enumerate(books[:10], 1):  # أول 10 فقط
+                print(f"  {i}. {b.get('pdfName', 'N/A')} - {b.get('title', 'N/A')[:50]}")
+            if len(books) > 10:
+                print(f"  ... و {len(books) - 10} كتاب آخر")
+            
+            # إرجاع الأول (أو يمكن طلب اختيار)
+            print(f"\n💡 سيتم عرض أول نتيجة: {books[0].get('pdfName', 'N/A')}")
+            return books[0]
 
 def find_book_by_id(collection, book_id: str):
     """البحث عن كتاب بـ ID"""
@@ -74,10 +101,13 @@ def main():
     """الدالة الرئيسية"""
     if len(sys.argv) < 2:
         print("الاستخدام:")
-        print("  python view_book_content.py <pdf_name>")
-        print("  python view_book_content.py --id <book_id>")
+        print("  python view_book_content.py <pdf_name>          # بحث جزئي (افتراضي)")
+        print("  python view_book_content.py --exact <pdf_name>   # بحث مطابق كامل")
+        print("  python view_book_content.py --id <book_id>       # بحث بـ ID")
         print("\nأمثلة:")
-        print("  python view_book_content.py 798--.pdf")
+        print("  python view_book_content.py 798                    # يبحث عن أي ملف يحتوي على '798'")
+        print("  python view_book_content.py 798--.pdf             # بحث جزئي")
+        print("  python view_book_content.py --exact 798--.pdf     # مطابقة كاملة")
         print("  python view_book_content.py --id 68f8cd0e9a41262d8d5af502")
         sys.exit(1)
     
@@ -110,10 +140,16 @@ def main():
         book_id = sys.argv[2]
         print(f"🔍 البحث عن الكتاب بـ ID: {book_id}")
         book = find_book_by_id(collection, book_id)
+    elif sys.argv[1] == "--exact" and len(sys.argv) >= 3:
+        # البحث المطابق الكامل
+        pdf_name = sys.argv[2]
+        print(f"🔍 البحث المطابق الكامل عن: {pdf_name}")
+        book = find_book_by_pdf_name(collection, pdf_name, exact_match=True)
     else:
+        # البحث الجزئي (افتراضي)
         pdf_name = sys.argv[1]
-        print(f"🔍 البحث عن الكتاب: {pdf_name}")
-        book = find_book_by_pdf_name(collection, pdf_name)
+        print(f"🔍 البحث الجزئي عن: {pdf_name}")
+        book = find_book_by_pdf_name(collection, pdf_name, exact_match=False)
     
     # عرض المحتوى
     display_book_content(book)
