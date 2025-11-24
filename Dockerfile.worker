@@ -1,0 +1,43 @@
+FROM node:20-alpine AS base
+
+# تثبيت التبعيات فقط عند الحاجة
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# نسخ ملفات package
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# مرحلة البناء
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# بناء TypeScript
+RUN npm run build
+
+# مرحلة الإنتاج - عامل PDF فقط
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 worker
+
+# نسخ الملفات الضرورية
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+
+# إنشاء مجلد مؤقت
+RUN mkdir -p /tmp/pdf-indexer && chown -R worker:nodejs /tmp/pdf-indexer
+
+USER worker
+
+# تشغيل العامل
+CMD ["npm", "run", "worker:pdf-index"]
+

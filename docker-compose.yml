@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # Redis - طابور المهام
+  redis:
+    image: redis:7-alpine
+    container_name: elmoustechar-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass "${REDIS_PASSWORD}"
+    restart: unless-stopped
+    networks:
+      - elmoustechar-network
+
+  # MongoDB - قاعدة البيانات (اختياري إذا كان لديك MongoDB خارجي)
+  # mongodb:
+  #   image: mongo:7
+  #   container_name: elmoustechar-mongo
+  #   ports:
+  #     - "27017:27017"
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: admin
+  #     MONGO_INITDB_ROOT_PASSWORD: password
+  #   volumes:
+  #     - mongo_data:/data/db
+  #   restart: unless-stopped
+  #   networks:
+  #     - elmoustechar-network
+
+  # خدمة i2pdf - استخراج النص من PDF
+  i2pdf-service:
+    build:
+      context: ./i2pdf
+      dockerfile: Dockerfile
+    container_name: elmoustechar-i2pdf
+    ports:
+      - "8080:8080"
+    environment:
+      - I2PDF_TMPDIR=/tmp/i2pdf
+      - TMPDIR=/tmp/i2pdf
+    volumes:
+      - i2pdf_tmp:/tmp/i2pdf
+    restart: unless-stopped
+    networks:
+      - elmoustechar-network
+    # إذا كنت تريد تشغيل خدمة FastAPI بدلاً من CLI
+    # command: uvicorn service:app --host 0.0.0.0 --port 8080
+
+  # عامل معالجة PDF
+  pdf-worker:
+    build:
+      context: ./bullmq
+      dockerfile: Dockerfile.worker
+    container_name: elmoustechar-pdf-worker
+    depends_on:
+      - redis
+      - i2pdf-service
+    environment:
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - MONGODB_URI=${MONGODB_URI}
+      - I2PDF_SERVICE_URL=http://i2pdf-service:8080
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - AWS_REGION=${AWS_REGION}
+      - PDF_INDEXER_CONCURRENCY=2
+    restart: unless-stopped
+    networks:
+      - elmoustechar-network
+
+  # تطبيق Next.js (اختياري للتطوير)
+  # web:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: elmoustechar-web
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - redis
+  #   environment:
+  #     - NODE_ENV=production
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - MONGODB_URI=${MONGODB_URI}
+  #     - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+  #     - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+  #     - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+  #     - AWS_REGION=${AWS_REGION}
+  #   restart: unless-stopped
+  #   networks:
+  #     - elmoustechar-network
+
+volumes:
+  redis_data:
+    driver: local
+  # mongo_data:
+  #   driver: local
+  i2pdf_tmp:
+    driver: local
+
+networks:
+  elmoustechar-network:
+    driver: bridge
+

@@ -6,3 +6,5 @@ setuptools>=58.1.0
 pdf2docx>=0.5.6
 ocrmypdf>=16.0
 pdfminer.six>=20220524
+pymongo>=4.0.0
+requests>=2.28.0

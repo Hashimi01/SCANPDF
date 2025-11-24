@@ -3,6 +3,7 @@ import datetime
 import os
 import platform
 import subprocess
+import sys
 import tempfile
 import json
 import re
@@ -453,14 +454,32 @@ def _has_unpaper() -> bool:
 
 
 def _run_ocr_sidecar(pdf_path: str, out_txt: str, out_pdf: str, lang: str, psm: int = 6, oem: int = 1) -> None:
-    cmd = [
-        "ocrmypdf",
+    # استخدام python -m ocrmypdf أولاً (الأفضل في Windows)، ثم ocrmypdf مباشرة
+    ocrmypdf_base = None
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "ocrmypdf", "--version"],
+            capture_output=True,
+            check=True,
+            timeout=5
+        )
+        ocrmypdf_base = [sys.executable, "-m", "ocrmypdf"]
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        # جرب ocrmypdf مباشرة
+        try:
+            subprocess.run(["ocrmypdf", "--version"], capture_output=True, check=True, timeout=5)
+            ocrmypdf_base = ["ocrmypdf"]
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            raise FileNotFoundError("ocrmypdf غير متاح. يرجى تثبيته أولاً: pip install ocrmypdf")
+    
+    cmd = ocrmypdf_base + [
         "--force-ocr",
         "--deskew",
     ]
-    # Only add --clean and --remove-background if unpaper is available
+    # Only add --clean if unpaper is available
+    # Note: --remove-background is temporarily not implemented in ocrmypdf
     if _has_unpaper():
-        cmd.extend(["--clean", "--remove-background"])
+        cmd.extend(["--clean"])
     cmd.extend([
         "--tesseract-pagesegmode", str(psm),
         "--tesseract-oem", str(oem),
@@ -486,10 +505,10 @@ def pdf_best_cmd(
     lang: str = typer.Option("ara", "--lang", "-l", help=pdf_best.lang_help),
 ) -> None:
     """
-    Best-effort Arabic text extraction:
-    - If text layer exists: export directly.
-    - Else: two OCR passes (lang and lang+eng), also extract -layout variants; select best.
-    Always outputs final text and a small report; never fails hard on quality.
+    OCR-only Arabic text extraction:
+    - Always uses OCR (never uses text layer).
+    - Two OCR passes (lang and lang+eng), also extract -layout variants; select best.
+    Always outputs final text and a small report.
     """
     if not pdf_path:
         raise SystemExit(typer.echo(pdf_best.pdf_missing))
@@ -506,76 +525,70 @@ def pdf_best_cmd(
     typer.echo(pdf_best.processing)
 
     candidates = []  # (path, metrics)
-    used_ocr = False
-    force_ocr_for_arabic = False
-    ar_ratio = 0.0
-    has_text = _has_text_layer(pdf_path)
-
+    used_ocr = True  # Always use OCR, never use text layer
+    
     try:
-        # Check text layer first
-        if has_text:
-            text = _extract_text_layer(pdf_path)
-            ar_ratio = _arabic_ratio(text)
-            
-            # For Arabic PDFs, check if text layer is good quality
-            # If Arabic ratio is significant but text is disconnected, force OCR
-            if ar_ratio > 0.1 and lang == "ara":
-                if _is_arabic_text_disconnected(text):
-                    typer.echo("Arabic text layer detected but appears disconnected. Using OCR for better results...")
-                    force_ocr_for_arabic = True
-                else:
-                    # Text layer seems OK, add as candidate (store text content)
-                    metrics = {"source": "text-layer", "length": len(text), "arabic_ratio": round(ar_ratio, 4)}
-                    candidates.append((text, metrics))
-            elif ar_ratio <= 0.1:
-                # Low Arabic content, text layer might be OK
-                metrics = {"source": "text-layer", "length": len(text), "arabic_ratio": round(ar_ratio, 4)}
-                candidates.append((text, metrics))
-            else:
-                # Non-Arabic or mixed, use text layer
-                metrics = {"source": "text-layer", "length": len(text), "arabic_ratio": round(ar_ratio, 4)}
-                candidates.append((text, metrics))
-        
-        # Always run OCR for Arabic PDFs (even if text layer exists) to get better results
-        # or if no text layer exists
-        # Force OCR if lang="ara" is explicitly set, or if Arabic is detected but disconnected
-        if force_ocr_for_arabic or not has_text or (lang == "ara" and has_text):
-            used_ocr = True
+        # Always use OCR only, never use text layer
+        ocr_success_a = False
+        ocr_success_b = False
+        try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 # pass A: primary lang
                 sidecar_a = os.path.join(tmpdir, f"{base}.a.txt")
                 ocr_a_pdf = os.path.join(tmpdir, f"{base}.a.pdf")
-                _run_ocr_sidecar(pdf_path, sidecar_a, ocr_a_pdf, lang=lang)
-                # layout from pass A
-                layout_a = os.path.join(tmpdir, f"{base}.a.layout.txt")
-                _pdftotext_layout(ocr_a_pdf, layout_a)
+                layout_a = None
+                try:
+                    _run_ocr_sidecar(pdf_path, sidecar_a, ocr_a_pdf, lang=lang)
+                    ocr_success_a = True
+                    # layout from pass A
+                    if os.path.exists(ocr_a_pdf):
+                        layout_a = os.path.join(tmpdir, f"{base}.a.layout.txt")
+                        _pdftotext_layout(ocr_a_pdf, layout_a)
+                except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                    typer.echo(f"OCR pass A failed: {e}")
 
                 # pass B: lang + eng
                 sidecar_b = os.path.join(tmpdir, f"{base}.b.txt")
                 ocr_b_pdf = os.path.join(tmpdir, f"{base}.b.pdf")
+                layout_b = None
                 lang_b = f"{lang}+eng" if "eng" not in lang else lang
-                _run_ocr_sidecar(pdf_path, sidecar_b, ocr_b_pdf, lang=lang_b)
-                # layout from pass B
-                layout_b = os.path.join(tmpdir, f"{base}.b.layout.txt")
-                _pdftotext_layout(ocr_b_pdf, layout_b)
+                try:
+                    _run_ocr_sidecar(pdf_path, sidecar_b, ocr_b_pdf, lang=lang_b)
+                    ocr_success_b = True
+                    # layout from pass B
+                    if os.path.exists(ocr_b_pdf):
+                        layout_b = os.path.join(tmpdir, f"{base}.b.layout.txt")
+                        _pdftotext_layout(ocr_b_pdf, layout_b)
+                except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                    typer.echo(f"OCR pass B failed: {e}")
 
                 # collect candidates if exist (store text content, not path)
-                for path, source in [
+                candidate_paths = [
                     (sidecar_a, "ocr-sidecar-a"),
-                    (layout_a, "ocr-layout-a"),
                     (sidecar_b, "ocr-sidecar-b"),
-                    (layout_b, "ocr-layout-b"),
-                ]:
+                ]
+                if layout_a:
+                    candidate_paths.append((layout_a, "ocr-layout-a"))
+                if layout_b:
+                    candidate_paths.append((layout_b, "ocr-layout-b"))
+                
+                for path, source in candidate_paths:
                     if os.path.exists(path):
                         txt = open(path, encoding="utf-8").read()
-                        candidates.append((txt, {"source": source, "length": len(txt), "arabic_ratio": round(_arabic_ratio(txt), 4)}))
+                        if txt.strip():  # Only add non-empty text
+                            candidates.append((txt, {"source": source, "length": len(txt), "arabic_ratio": round(_arabic_ratio(txt), 4)}))
+        except Exception as e:
+            typer.echo(f"OCR process failed: {e}")
 
-            # select best: highest arabic_ratio, then longer length
-            if candidates:
-                best_text, best_metrics = sorted(candidates, key=lambda x: (x[1]["arabic_ratio"], x[1]["length"]))[-1]
-                with open(final_txt, "w", encoding="utf-8") as f:
-                    f.write(best_text)
-                typer.echo(f"Selected best candidate: {best_metrics['source']} (Arabic ratio: {best_metrics['arabic_ratio']:.4f})")
+        # select best: highest arabic_ratio, then longer length
+        if candidates:
+            best_text, best_metrics = sorted(candidates, key=lambda x: (x[1]["arabic_ratio"], x[1]["length"]))[-1]
+            with open(final_txt, "w", encoding="utf-8") as f:
+                f.write(best_text)
+            typer.echo(f"Selected best candidate: {best_metrics['source']} (Arabic ratio: {best_metrics['arabic_ratio']:.4f})")
+        else:
+            # OCR failed completely, raise error
+            raise SystemExit(typer.echo("OCR failed completely. No text could be extracted. Please ensure Tesseract OCR with Arabic language data is installed."))
 
         # write report
         report = {
