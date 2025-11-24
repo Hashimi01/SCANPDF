@@ -16,59 +16,44 @@ MONGO_URI = "mongodb+srv://vall:VVVVvvvv24@cluster0.rzpzrnn.mongodb.net/?retryWr
 DB_NAME = "test"
 COLLECTION_NAME = "book_summaries"
 
-# النطاقات (من run_parallel_with_screens.py)
-RANGES = [
-    (1, 110, 150),   # script_1: من 110 إلى 150
-    (2, 151, 191),   # script_2: من 151 إلى 191
-    (3, 192, 232),   # script_3: من 192 إلى 232
-    (4, 233, 273),   # script_4: من 233 إلى 273
-    (5, 274, 314),   # script_5: من 274 إلى 314
-    (6, 315, 355),   # script_6: من 315 إلى 355
-    (7, 356, 396),   # script_7: من 356 إلى 396
-    (8, 397, 436),   # script_8: من 397 إلى 436
-    (9, 437, 476),   # script_9: من 437 إلى 476
-    (10, 477, 516),  # script_10: من 477 إلى 516
-    (11, 517, 556),  # script_11: من 517 إلى 556
-    (12, 557, 596),  # script_12: من 557 إلى 596
-    (13, 597, 636),  # script_13: من 597 إلى 636
-    (14, 637, 676),  # script_14: من 637 إلى 676
-    (15, 677, 716),  # script_15: من 677 إلى 716
-    (16, 717, 756),  # script_16: من 717 إلى 756
-    (17, 757, 796),  # script_17: من 757 إلى 796
-    (18, 797, 836),  # script_18: من 797 إلى 836
-    (19, 837, 876),  # script_19: من 837 إلى 876
-    (20, 877, 916),  # script_20: من 877 إلى 916
-    (21, 917, 956),  # script_21: من 917 إلى 956
-    (22, 957, 996),  # script_22: من 957 إلى 996
-    (23, 997, 1036), # script_23: من 997 إلى 1036
-    (24, 1037, 1076), # script_24: من 1037 إلى 1076
-    (25, 1077, 1116), # script_25: من 1077 إلى 1116
-    (26, 1117, 1156), # script_26: من 1117 إلى 1156
-    (27, 1157, 1196), # script_27: من 1157 إلى 1196
-    (28, 1197, 1236), # script_28: من 1197 إلى 1236
-    (29, 1237, 1276), # script_29: من 1237 إلى 1276
-    (30, 1277, 1316), # script_30: من 1277 إلى 1316
-    (31, 1317, 1356), # script_31: من 1317 إلى 1356
-    (32, 1357, 1396), # script_32: من 1357 إلى 1396
-    (33, 1397, 1436), # script_33: من 1397 إلى 1436
-    (34, 1437, 1476), # script_34: من 1437 إلى 1476
-    (35, 1477, 1516), # script_35: من 1477 إلى 1516
-    (36, 1517, 1556), # script_36: من 1517 إلى 1556
-    (37, 1557, 1596), # script_37: من 1557 إلى 1596
-    (38, 1597, 1636), # script_38: من 1597 إلى 1636
-    (39, 1637, 1676), # script_39: من 1637 إلى 1676
-    (40, 1677, 1716), # script_40: من 1677 إلى 1716
-    (41, 1717, 1756), # script_41: من 1717 إلى 1756
-    (42, 1757, 1796), # script_42: من 1757 إلى 1796
-    (43, 1797, 1836), # script_43: من 1797 إلى 1836
-    (44, 1837, 1876), # script_44: من 1837 إلى 1876
-    (45, 1877, 1916), # script_45: من 1877 إلى 1916
-    (46, 1917, 1956), # script_46: من 1917 إلى 1956
-    (47, 1957, 1996), # script_47: من 1957 إلى 1996
-    (48, 1997, 2036), # script_48: من 1997 إلى 2036
-    (49, 2037, 2076), # script_49: من 2037 إلى 2076
-    (50, 2077, 2116), # script_50: من 2077 إلى 2116
-]
+# إعدادات (يتم تحديثها تلقائياً من الملف)
+START_BOOK = 1  # من الكتاب رقم 1
+NUM_SCRIPTS = 50  # عدد السكربتات المتوازية
+
+def calculate_ranges(start: int, end: int, num_scripts: int) -> List[Tuple[int, int, int]]:
+    """
+    تقسيم النطاق إلى مجموعات متساوية (نفس منطق run_parallel_with_screens.py)
+    
+    Args:
+        start: رقم الكتاب الأول
+        end: رقم الكتاب الأخير
+        num_scripts: عدد السكربتات
+        
+    Returns:
+        قائمة من tuples (script_num, start, end) لكل سكربت
+    """
+    total_books = end - start + 1
+    books_per_script = total_books // num_scripts
+    remainder = total_books % num_scripts
+    
+    ranges = []
+    current_start = start
+    
+    for i in range(1, num_scripts + 1):
+        # توزيع الباقي على السكربتات الأولى
+        current_end = current_start + books_per_script - 1
+        if i <= remainder:
+            current_end += 1
+        
+        # التأكد من عدم تجاوز النهاية
+        if current_end > end:
+            current_end = end
+        
+        if current_start <= end:
+            ranges.append((i, current_start, current_end))
+            current_start = current_end + 1
+    
+    return ranges
 
 def load_books():
     """تحميل ملف الكتب"""
@@ -140,6 +125,11 @@ def main():
     total_books = len(books)
     print(f"✅ تم تحميل {total_books} كتاب")
     
+    # حساب النطاقات تلقائياً
+    end_book = total_books
+    ranges = calculate_ranges(START_BOOK, end_book, NUM_SCRIPTS)
+    print(f"\n📊 تم تقسيم {total_books} كتاب على {NUM_SCRIPTS} سكربت")
+    
     # الاتصال بـ MongoDB
     print(f"\n📡 جاري الاتصال بـ MongoDB...")
     try:
@@ -168,7 +158,7 @@ def main():
     in_progress = []
     completed = []
     
-    for script_num, start, end in RANGES:
+    for script_num, start, end in ranges:
         result = check_range_progress(books, saved_ids, script_num, start, end)
         results.append(result)
         
