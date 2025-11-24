@@ -9,7 +9,12 @@ echo "======================================================================"
 # 1. قتل جميع جلسات screen
 echo ""
 echo "🛑 جاري إنهاء جميع جلسات screen..."
-screen -X quit 2>/dev/null || true
+# قتل جميع الجلسات النشطة
+for session in $(screen -ls | grep -o '[0-9]*\.[^[:space:]]*' | grep -v '^[0-9]*\.$'); do
+    screen -S "$session" -X quit 2>/dev/null || true
+done
+# تنظيف الجلسات الميتة
+screen -wipe >/dev/null 2>&1 || true
 sleep 2
 
 # قتل عمليات tesseract و ocrmypdf
