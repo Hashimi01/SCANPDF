@@ -84,13 +84,25 @@ def main():
     # الاتصال بـ MongoDB
     print("📡 جاري الاتصال بـ MongoDB...")
     try:
-        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+        # زيادة timeout وإضافة خيارات اتصال أفضل
+        client = MongoClient(
+            MONGO_URI,
+            serverSelectionTimeoutMS=30000,  # 30 ثانية
+            connectTimeoutMS=30000,
+            socketTimeoutMS=30000,
+            retryWrites=True,
+            retryReads=True
+        )
         client.admin.command('ping')
         db = client[DB_NAME]
         collection = db[COLLECTION_NAME]
         print("✅ تم الاتصال بنجاح\n")
     except Exception as e:
         print(f"❌ فشل الاتصال: {e}")
+        print("\n💡 نصائح:")
+        print("   - تحقق من الاتصال بالإنترنت")
+        print("   - تحقق من أن IP الخاص بك مسموح في MongoDB Atlas")
+        print("   - جرب مرة أخرى بعد قليل")
         sys.exit(1)
     
     # البحث عن الكتاب
