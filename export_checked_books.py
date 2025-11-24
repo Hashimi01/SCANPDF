@@ -30,6 +30,13 @@ def get_checked_books(collection) -> List[Dict]:
     
     # جلب جميع الكتب
     for book in collection.find({}):
+        # تحويل processed_at إلى string إذا كان datetime
+        processed_at = book.get("processed_at", "")
+        if isinstance(processed_at, datetime):
+            processed_at = processed_at.isoformat()
+        elif processed_at and not isinstance(processed_at, str):
+            processed_at = str(processed_at)
+        
         book_data = {
             "_id": str(book.get("_id", "")),
             "title": book.get("title", ""),
@@ -40,7 +47,7 @@ def get_checked_books(collection) -> List[Dict]:
             "number_of_pages": book.get("number_of_pages", 0),
             "language": book.get("language", "ara"),
             "used_ocr": book.get("used_ocr", False),
-            "processed_at": book.get("processed_at", "")
+            "processed_at": processed_at
         }
         books.append(book_data)
     
