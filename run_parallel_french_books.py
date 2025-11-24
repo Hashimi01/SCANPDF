@@ -16,7 +16,7 @@ from typing import List, Tuple
 # إعدادات
 INPUT_FILE = "french_books_incorrectly_processed.json"
 SCRIPT_NAME = "reprocess_french_books.py"
-NUM_SCRIPTS = 10  # عدد السكربتات المتوازية (يمكن تعديله)
+NUM_SCRIPTS = 5  # عدد السكربتات المتوازية (يمكن تعديله)
 
 def check_screen_installed() -> bool:
     """التحقق من تثبيت screen"""
