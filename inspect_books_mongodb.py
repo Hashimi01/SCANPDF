@@ -322,15 +322,26 @@ def extract_pdf_with_ocr_only(pdf_path: str, lang: str = "ara") -> Dict[str, Any
     
     # اختيار أفضل مرشح
     if not candidates:
-        raise RuntimeError("OCR failed completely. No text could be extracted. Please ensure Tesseract OCR with Arabic language data is installed.")
+        lang_name = "العربية" if lang == "ara" else "الفرنسية"
+        raise RuntimeError(f"OCR failed completely. No text could be extracted. Please ensure Tesseract OCR with {lang_name} language data is installed.")
     
-    # select best: highest arabic_ratio, then longer length
-    best_text, best_metrics = sorted(
-        candidates,
-        key=lambda x: (x[1]["arabic_ratio"], x[1]["length"])
-    )[-1]
-    
-    print(f"  ✅ تم اختيار أفضل مرشح: {best_metrics['source']} (نسبة العربية: {best_metrics['arabic_ratio']:.4f})")
+    # اختيار أفضل مرشح حسب اللغة:
+    # - للعربية: أعلى نسبة عربية ثم أطول نص
+    # - للفرنسية: أطول نص فقط (لأن arabic_ratio سيكون منخفضاً)
+    if lang == "fra":
+        # للكتب الفرنسية: اختيار أطول نص
+        best_text, best_metrics = sorted(
+            candidates,
+            key=lambda x: x[1]["length"]
+        )[-1]
+        print(f"  ✅ تم اختيار أفضل مرشح: {best_metrics['source']} (الطول: {best_metrics['length']} حرف)")
+    else:
+        # للكتب العربية: أعلى نسبة عربية ثم أطول نص
+        best_text, best_metrics = sorted(
+            candidates,
+            key=lambda x: (x[1]["arabic_ratio"], x[1]["length"])
+        )[-1]
+        print(f"  ✅ تم اختيار أفضل مرشح: {best_metrics['source']} (نسبة العربية: {best_metrics['arabic_ratio']:.4f})")
     
     # OCR يخرج النص بشكل صحيح، لا حاجة لعكسه
     # تقسيم النص إلى صفحات (تقريبي - كل 3000 حرف = صفحة)
