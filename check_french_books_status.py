@@ -51,6 +51,13 @@ def check_french_books_in_mongodb(collection):
         # التحقق من أن الكتاب فرنسي
         if is_french_book(pdf_name):
             total_french += 1
+            # تحويل processed_at إلى string إذا كان datetime
+            processed_at = book.get("processed_at", "")
+            if isinstance(processed_at, datetime):
+                processed_at = processed_at.isoformat()
+            elif processed_at and not isinstance(processed_at, str):
+                processed_at = str(processed_at)
+            
             book_info = {
                 "_id": book_id,
                 "title": title,
@@ -58,7 +65,7 @@ def check_french_books_in_mongodb(collection):
                 "pdfLink": book.get("pdfLink", ""),
                 "saved_language": language,
                 "number_of_pages": book.get("number_of_pages", 0),
-                "processed_at": book.get("processed_at", "")
+                "processed_at": processed_at
             }
             french_books.append(book_info)
             
