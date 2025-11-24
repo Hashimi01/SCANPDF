@@ -16,7 +16,7 @@ MONGO_URI = "mongodb+srv://vall:VVVVvvvv24@cluster0.rzpzrnn.mongodb.net/?retryWr
 DB_NAME = "test"
 COLLECTION_NAME = "book_summaries"
 
-# اسم ملف الإخراج
+# اسم ملف الإخراج (سيحفظ في المجلد الحالي حيث يتم تشغيل السكربت)
 OUTPUT_FILE = "checked_books.json"
 
 def get_checked_books(collection) -> List[Dict]:
@@ -133,8 +133,10 @@ def main():
     total_pages = sum(book.get("number_of_pages", 0) for book in books)
     print(f"📄 إجمالي الصفحات: {total_pages} صفحة")
     
+    file_path = os.path.abspath(OUTPUT_FILE)
     print(f"\n{'='*70}")
-    print(f"✅ تم حفظ الملف: {os.path.abspath(OUTPUT_FILE)}")
+    print(f"✅ تم حفظ الملف في المجلد الحالي:")
+    print(f"   📁 {file_path}")
     print(f"{'='*70}")
     
     client.close()
