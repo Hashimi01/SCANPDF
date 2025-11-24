@@ -38,28 +38,56 @@ def main():
         print(f"❌ خطأ في قراءة الملف: {e}")
         sys.exit(1)
     
-    books = data.get("books", [])
-    if not books:
+    all_books = data.get("books", [])
+    if not all_books:
         print("❌ لم يتم العثور على كتب في الملف")
         sys.exit(1)
     
-    total_books = len(books)
+    total_books = len(all_books)
     print(f"✅ تم العثور على {total_books} كتاب فرنسي يحتاج إعادة فحص")
+    
+    # تحديد النطاق (إذا تم تمريره كمعاملات)
+    if len(sys.argv) >= 3:
+        try:
+            start_idx = int(sys.argv[1]) - 1  # تحويل إلى 0-indexed
+            end_idx = int(sys.argv[2])
+            
+            if start_idx < 0 or start_idx >= total_books:
+                print(f"❌ رقم البداية غير صحيح (يجب أن يكون بين 1 و {total_books})")
+                sys.exit(1)
+            if end_idx < 1 or end_idx > total_books:
+                print(f"❌ رقم النهاية غير صحيح (يجب أن يكون بين {start_idx + 1} و {total_books})")
+                sys.exit(1)
+            if start_idx >= end_idx:
+                print("❌ رقم البداية يجب أن يكون أقل من رقم النهاية")
+                sys.exit(1)
+            
+            books = all_books[start_idx:end_idx]
+            count = len(books)
+            print(f"📋 سيتم فحص {count} كتاب (من {start_idx + 1} إلى {end_idx})")
+        except ValueError:
+            print("❌ يرجى إدخال أرقام صحيحة")
+            sys.exit(1)
+    else:
+        books = all_books
+        count = total_books
+        print(f"📋 سيتم فحص جميع الكتب ({count} كتاب)")
     
     # الاتصال بـ MongoDB
     print("\n📡 جاري الاتصال بـ MongoDB...")
     collection, client = get_mongodb_collection()
     
-    # تأكيد
-    print("\n" + "=" * 70)
-    print(f"⚠️  سيتم إعادة فحص {total_books} كتاب فرنسي")
-    print("⚠️  سيتم استبدال البيانات القديمة بالبيانات الجديدة (باللغة الفرنسية)")
-    print("=" * 70)
-    confirm = input("\nهل تريد المتابعة؟ (y/n): ").strip().lower()
-    if confirm not in ['y', 'yes', 'نعم', 'ن']:
-        print("❌ تم الإلغاء")
-        client.close()
-        sys.exit(0)
+    # تأكيد (فقط إذا لم يتم تمرير النطاق كمعامل)
+    if len(sys.argv) < 3:
+        print("\n" + "=" * 70)
+        print(f"⚠️  سيتم إعادة فحص {count} كتاب فرنسي")
+        print("⚠️  سيتم استبدال البيانات القديمة بالبيانات الجديدة (باللغة الفرنسية)")
+        print("=" * 70)
+        confirm = input("\nهل تريد المتابعة؟ (y/n): ").strip().lower()
+        if confirm not in ['y', 'yes', 'نعم', 'ن']:
+            print("❌ تم الإلغاء")
+            client.close()
+            sys.exit(0)
     
     # معالجة الكتب
     print("\n" + "=" * 70)
@@ -80,8 +108,12 @@ def main():
             if not book.get("pdfLink") and book.get("pdfLink") is None:
                 book["pdfLink"] = book.get("url", "")
             
+            # إضافة pdfLink إذا لم يكن موجوداً
+            if not book.get("pdfLink"):
+                book["pdfLink"] = book.get("url", "")
+            
             # معالجة الكتاب (auto_detect_lang=True سيكتشف أنها فرنسية من الاسم)
-            result = process_book_with_mongodb(book, idx, total_books, collection, auto_detect_lang=True)
+            result = process_book_with_mongodb(book, idx, count, collection, auto_detect_lang=True)
             if result:
                 success_count += 1
                 saved_count += 1
@@ -110,7 +142,7 @@ def main():
     print(f"   ✅ نجح: {success_count}")
     print(f"   💾 محفوظ في MongoDB: {saved_count}")
     print(f"   ❌ فشل: {fail_count}")
-    print(f"   📄 إجمالي: {total_books}")
+    print(f"   📄 إجمالي: {count}")
     
     print("\n" + "=" * 70)
     print("✅ اكتملت العملية!")
