@@ -18,7 +18,7 @@ BOOKS_FILE = "books-2025-11-09T23-13-42-652Z.json"
 SCRIPT_NAME = "inspect_books_mongodb.py"
 START_BOOK = 1  # من الكتاب رقم 1 (يتم تحديثه تلقائياً من الملف)
 END_BOOK = None  # سيتم تحديثه تلقائياً من الملف
-NUM_SCRIPTS = 50  # عدد السكربتات المتوازية
+NUM_SCRIPTS = 8  # عدد السكربتات المتوازية
 
 def check_screen_installed() -> bool:
     """التحقق من تثبيت screen"""
